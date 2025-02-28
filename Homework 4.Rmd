@@ -1,0 +1,135 @@
+---
+title: "Homework 4"
+author: "Justin Vernieri"
+date: "2025-02-28"
+output: html_document
+---
+
+```{r}
+library(fpp)
+library(fpp2)
+```
+
+### Time Series: Global Renewable Energy Production from 1973-2022 (monthly data)
+#### Measured in Quadrillion British Thermal Units (BTUs)
+```{r}
+# Importing the Excel file for my data set - Global Renewable Energy Production in Quadrillion British Thermal Units (BTUs)
+Renewable_Energy_Production <- read.csv("C:\\Users\\justi\\OneDrive\\Documents\\Rutgers Junior\\Sem 2\\Time Series Modeling\\My time series dataset and files\\global energy archive\\World Energy Overview - Copy.csv")
+
+# Changing the date column to the appropriate class
+Renewable_Energy_Production$Date <- as.Date(Renewable_Energy_Production$Date, format = "%Y-%m-%d")
+
+# Changing my data set from data frame to time series
+Renewable_Energy_ts <- ts(Renewable_Energy_Production$Total.Renewable.Energy.Production, start=c(1973,1), frequency=12)
+Renewable_Energy_ts
+
+# Original line graph for the data set
+plot(Renewable_Energy_ts, col = "Black", xlab = "Time", ylab = "Production in Quadrillion BTUs", main = "Total Global Renewable Energy Production Over Time")
+```
+
+### Examining Trend and Seasonality using Acf
+```{r}
+# The Acf shows that there is a strong trend among the data set. It exhibits only very little seasonality, as indicted by the subtle upticks in lag 12 and lag 24 that correspond to monthly data, which my data set is. 
+Acf(Renewable_Energy_ts)
+```
+
+### Different Models and 2-year Forecasts (mean, naive, random walk, seasonal naive, moving averages) 
+```{r}
+# Mean forecast
+# While in recent years total renewable energy production has been around 0.8-1.2 quadrillion BTUs, the mean forecast shows that production in the next two years will be around 0.6, with an 80% chance it will fall within the blue area and a 95% chance it will fall into the gray area. The reason for this forecast being so off is that it assigns equal weight to all historical data from 1973 on, in which renewable energy production was around 0.4-0.6 quadrillion BTUs for over 20 years and then only started to increase after 2010.
+mean_renewable <- meanf(Renewable_Energy_ts, 24)
+plot(mean_renewable, xlab="Time", ylab="Production in Quadrillion BTUs")
+accuracy(mean_renewable) # Using MAPE (mean average percent error) as the accuracy measure, we see that the forecast using the mean is off by about 25.89%, which is not a strong indication to use this forecast.
+
+# Naive forecast
+# This naive forecast is a "no-change" forecast for the next two years. It serves as a good benchmark, with the forecast being around that last historical data point of about 1.09 quadrillion BTUs. This forecast does not change, as indicated by the straight horizontal blue line.
+naive_renewable <- naive(Renewable_Energy_ts, 24)
+plot(naive_renewable, xlab="Time", ylab="Production in Quadrillion BTUs")
+accuracy(naive_renewable) # The MAPE indicates that this forecast is off by about 5.77%.
+
+# Random Walk forecast
+# This forecast is different from the naive method because it incorporates the average trend from past values and it includes drift. So, the random walk forecast shows that renewable energy production over the next two years will increase slightly, as indicated by an upward straight blue line.
+rwf_renewable <- rwf(Renewable_Energy_ts, 24, drift=TRUE)
+plot(rwf_renewable, xlab="Time", ylab="Production in Quadrillion BTUs")
+accuracy(rwf_renewable) # While the random walk forecast takes into account trend and drift, the MAPE indicates that this forecast is off by about 5.78%, which almost the exact same as the naive forecast.
+
+# Seasonal Naive forecast
+# Seasonal naive forecasts assume that seasonal patterns repeat. So, this forecast for our data shows that renewable energy production will follow the same cycle from the last season (month of the previous year).
+snaive_renewable <- snaive(Renewable_Energy_ts,24)
+plot(snaive_renewable, xlab="Time", ylab="Production in Quadrillion BTUs")
+accuracy(snaive_renewable) # The MAPE indicates that this forecast is off by about 6.58%. 
+
+# Moving averages model
+# This moving averages model has a window size of 5 and only assigns equal weight on recent points within the window. It takes the average of those points in order to smooth out random fluctuations in the time series data. 
+MA5_renewable <- ma(Renewable_Energy_ts, order=5)
+plot(MA5_renewable, xlab="Time", ylab="Production in Quadrillion BTUs") 
+```
+
+### Exponential Smoothing
+```{r}
+# Exponential Smoothing using ETS (error, trend, seasonality)
+# This output supports the fact that renewable energy production has been increasing steadily, as seen in the level component. The model also recognizes a slight seasonal pattern of the data, as the seasonal component shows repetition over time despite its low magnitude. Also, the slope component suggests that the slope is not constant and there are fluctuations in the rate of change of the level. For example, there is a dip in the rate of change of slope following the year 2000.
+ets_renewable <- ets(Renewable_Energy_ts)
+plot(ets_renewable)
+
+# The forecast from the ETS method follows the historical upward trend, indicating that renewable energy production is expected to remain high over time. The forecast also captures seasonal effects, meaning production will continue to rise and fall periodically. It is also important to note for this forecast that the gray shaded areas widen as the forecast extends longer into the future, showing increasing uncertainty.
+forecast_ets_renewable <- forecast.ets(ets_renewable,h=24)
+plot(forecast_ets_renewable, xlab="Time", ylab="Production in Quadrillion BTUs")
+accuracy(forecast_ets_renewable) # The MAPE indicates that this forecast is off by about 3.179%.
+
+# Exponential Smoothing using Holt-Winters
+# Holt-Winters is a forecast-ready model with smoothing applied. The level, trend, and seasonal components can be inspected. The Holt-Winters line steadily increases, indicating a long-term trend in renewable energy production. The Holt-Winters method smooths out short-term noise, making the trend and seasonality clearer. It seems that the line follows the original time series data closely, which means it is fitting well.
+HW_renewable <- HoltWinters(Renewable_Energy_ts)
+plot(HW_renewable, xlab="Time", ylab="Production in Quadrillion BTUs")
+
+# The Holt-Winters forecast is very similar to the other exponential smoothing forecast above. The main difference that I notice between the two is that the magnitude of the fluctuations are slightly less in the Holt-Winters forecast. There is less uncertainty with the Holt-Winters forecast too (smaller shaded areas around the blue line).
+forecast_HW_renewable <- forecast(HW_renewable, h=24)
+plot(forecast_HW_renewable, xlab="Time", ylab="Production in Quadrillion BTUs")
+accuracy(forecast_HW_renewable) # The MAPE indicates that this forecast is off by about 3.288%, only slightly more than the ETS method.
+```
+
+### Decomposition
+```{r}
+# Seasonal and Trend Decomposition using Loess - stl function
+# This model shows that trend dominates the data. Seasonality and randomness do not play a huge part in this time series. While the seasonal component shows repeated fluctuations at certain intervals (i.e month of May has highest production levels), the magnitude of seasonality is very low, as the fluctuations still remain very close to 0 in the output. The same is with the remainder component, which remains close to 0 over time.
+stl_decomp_renewable <- stl(Renewable_Energy_ts, s.window="periodic")
+plot(stl_decomp_renewable)
+
+# Seasonally adjusted decomposition model from stl function
+# The output shows the decomposition model when the seasonal component is removed, leaving only the trend and remainder components. There are still dips and spikes, meaning that seasonality did not play a huge part in the original time series data.
+plot(Renewable_Energy_ts, xlab="Time", ylab="Production in Quadrillion BTUs")
+lines(seasadj(stl_decomp_renewable), col="red")
+
+# 2-year default period forecast from stl function
+# This forecast for decomposition shows that renewable energy production should fluctuate between 1.0-1.2 quadrillion BTUs over the next two years. There is high uncertainty in this forecast, as indicated by the blue and gray shaded areas spanning from about 0.8-1.4 quadrillion BTUs.
+f_stl_renewable <- forecast(stl_decomp_renewable,h=24)
+plot(f_stl_renewable, xlab="Time", ylab="Production in Quadrillion BTUs")
+accuracy(f_stl_renewable) # The MAPE indicates that this forecast is off by about 3.236%.
+
+# Other decomposition method using decompose function
+# This method suggests the same information as the previous decomposition method. Trend plays the biggest part in the data on renewable energy production.
+decompose_renewable <- decompose(Renewable_Energy_ts)
+plot(decompose_renewable)
+
+# Seasonally adjusted model from decompose function
+# Like the other seasonally adjusted decomposition model, this one also indicates that seasonality did not play a major role in the original data of renewable energy production. 
+plot(Renewable_Energy_ts, xlab="Time", ylab="Production in Quadrillion BTUs")
+lines(seasadj(decompose_renewable), col="blue")
+```
+
+### Time Series and Forecasts on Single Plot
+```{r}
+plot(mean_renewable, xlab="Time", ylab="Production in Quadrillion BTUs", main="Combined Forecasts")
+lines(naive_renewable$mean,col="red")
+lines(rwf_renewable$mean,col="green")
+lines(snaive_renewable$mean,col="yellow")
+lines(MA5_renewable,col="blue")
+lines(forecast_ets_renewable$mean, col="orange")
+lines(forecast_HW_renewable$mean, col="purple")
+lines(seasadj(stl_decomp_renewable),col="pink")
+```
+
+### Based on MAPE, which model/forecast is best to use?
+```{r}
+# I selected MAPE, mean average percent error, as the accuracy measure for this time series analysis. The forecast with the best MAPE is exponential smoothing using the ETS (error, trend, seasonality) method. This forecast had the lowest MAPE of about 3.179%. The MAPE for the Holt-Winters and decomposition forecasts were less than 0.2% higher than for the ETS method. This means they would still be reasonable to use even though the ETS forecast is technically the best and most accurate.
+```
